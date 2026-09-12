@@ -3,84 +3,115 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>사내 연차 및 휴가 관리 시스템</title>
+  <title>직원 연차 관리 달력</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { margin: 0; padding: 15px; background-color: #f4f6f9; color: #333; }
-    .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-    h2 { font-size: 18px; margin-top: 0; margin-bottom: 15px; color: #1a73e8; border-bottom: 2px solid #e8f0fe; padding-bottom: 8px; }
-    label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; }
-    input, select, button { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #dadce0; border-radius: 8px; font-size: 14px; }
-    button { background-color: #1a73e8; color: white; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
-    button:hover { background-color: #1557b0; }
-    .row { display: flex; gap: 10px; }
-    .row > div { flex: 1; }
-    .checkbox-label { display: flex; align-items: center; gap: 8px; font-weight: normal; cursor: pointer; }
-    .checkbox-label input { width: auto; margin-bottom: 0; }
-    .result-box { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; margin-top: 10px; }
-    .badge { background: #e8f0fe; color: #1a73e8; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-    .warn { color: #d93025; font-weight: bold; }
-    .info { color: #1a73e8; }
+    body { margin: 0; padding: 12px; background-color: #f4f6f8; color: #333; }
+    .card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    h2 { font-size: 16px; margin-top: 0; margin-bottom: 12px; color: #1a73e8; display: flex; align-items: center; justify-content: space-between; }
+    select, input, button { width: 100%; padding: 10px; border: 1px solid #dadce0; border-radius: 8px; font-size: 14px; }
+    button { background-color: #1a73e8; color: white; border: none; font-weight: bold; cursor: pointer; }
+    
+    /* 현황판 스타일 */
+    .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; margin-top: 10px; }
+    .status-item { background: #f8f9fa; border: 1px solid #e9ecef; padding: 8px 4px; border-radius: 8px; }
+    .status-item .label { font-size: 11px; color: #666; margin-bottom: 4px; }
+    .status-item .value { font-size: 16px; font-weight: bold; color: #1a73e8; }
+    .status-item.remain .value { color: #d93025; }
+
+    /* 달력 스타일 */
+    .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .calendar-header h3 { margin: 0; font-size: 16px; }
+    .calendar-header button { width: auto; padding: 6px 14px; margin: 0; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+    .day-header { font-weight: bold; padding: 6px 0; font-size: 12px; color: #555; background: #eee; border-radius: 4px; }
+    .day-header.sun { color: #d93025; }
+    .day-header.sat { color: #1a73e8; }
+    
+    .day-cell { min-height: 62px; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; font-size: 12px; }
+    .day-cell.other-month { opacity: 0.3; background: #fafafa; }
+    .day-cell.today { border: 2px solid #1a73e8; font-weight: bold; }
+    .day-cell .num { text-align: left; font-size: 11px; }
+    .day-cell.sun .num { color: #d93025; }
+    .day-cell.sat .num { color: #1a73e8; }
+    
+    /* 연차 배지 표시 */
+    .leave-badge { font-size: 10px; padding: 2px 4px; border-radius: 4px; color: white; margin-top: 2px; text-align: center; word-break: keep-all; }
+    .badge-full { background-color: #d93025; }
+    .badge-am { background-color: #f9ab00; }
+    .badge-pm { background-color: #34a853; }
+
+    /* 모달 팝업 */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); justify-content: center; align-items: center; z-index: 1000; }
+    .modal-content { background: #fff; padding: 20px; border-radius: 12px; width: 85%; max-width: 320px; }
   </style>
 </head>
 <body>
 
   <div class="card">
-    <h2>1. 직원 데이터 업로드 (.xlsx)</h2>
+    <h2>1. 엑셀 파일 업로드</h2>
     <input type="file" id="excelFile" accept=".xlsx, .xls">
-    <small style="color:#666; display:block; margin-top:-5px;">* 다중 시트의 '성명*', '입사일*' 항목을 자동으로 불러옵니다.</small>
   </div>
 
   <div class="card">
-    <h2>2. 대상 직원 선택</h2>
-    <select id="employeeSelect" disabled>
-      <option value="">-- 먼저 엑셀 파일을 업로드하세요 --</option>
+    <h2>2. 직원 선택</h2>
+    <select id="employeeSelect" disabled onchange="onEmployeeChange()">
+      <option value="">-- 먼저 엑셀 파일을 올려주세요 --</option>
     </select>
-  </div>
-
-  <div class="card">
-    <h2>3. 휴가 신청 및 규정 검증</h2>
-    <label>휴가 구분</label>
-    <select id="leaveType">
-      <option value="연차">연차</option>
-      <option value="오전반차">오전반차</option>
-      <option value="오후반차">오후반차</option>
-      <option value="경조사">경조사/특별휴가</option>
-    </select>
-
-    <div class="row">
-      <div>
-        <label>시작일</label>
-        <input type="date" id="startDate">
+    
+    <div id="statusBoard" class="status-grid" style="display:none;">
+      <div class="status-item">
+        <div class="label">근속년수</div>
+        <div class="value" id="dispYears">0년</div>
       </div>
-      <div>
-        <label>종료일</label>
-        <input type="date" id="endDate">
+      <div class="status-item">
+        <div class="label">발생연차</div>
+        <div class="value" id="dispTotal">0일</div>
+      </div>
+      <div class="status-item">
+        <div class="label">사용연차</div>
+        <div class="value" id="dispUsed">0일</div>
+      </div>
+      <div class="status-item remain">
+        <div class="label">잔여연차</div>
+        <div class="value" id="dispRemain">0일</div>
       </div>
     </div>
-
-    <label class="checkbox-label" style="margin-bottom: 12px;">
-      <input type="checkbox" id="isHolidayAdjacent"> 공휴일 전/후 연차 사용 건
-    </label>
-    <label class="checkbox-label" style="margin-bottom: 15px;">
-      <input type="checkbox" id="isAdvanceLeave"> 잔여 연차 부족 시 당겨쓰기 신청
-    </label>
-
-    <button type="button" onclick="validateLeave()">규정 검증 실행</button>
   </div>
 
-  <div class="card">
-    <h2>4. 검증 리포트</h2>
-    <div id="reportBox" class="result-box">
-      직원을 선택하고 검증을 실행하세요.
+  <div class="card" id="calendarCard" style="display:none;">
+    <div class="calendar-header">
+      <button onclick="changeMonth(-1)">◀ 이전달</button>
+      <h3 id="currentMonthStr">2026년 9월</h3>
+      <button onclick="changeMonth(1)">다음달 ▶</button>
+    </div>
+    <div class="calendar-grid" id="calendarGrid"></div>
+  </div>
+
+  <!-- 연차 등록/취소 모달 -->
+  <div class="modal" id="leaveModal">
+    <div class="modal-content">
+      <h3 id="modalDateStr" style="margin-top:0;">2026-09-01</h3>
+      <p style="font-size:13px; color:#666;">등록할 휴가 구분을 선택하세요.</p>
+      <button onclick="addLeave('연차', 1.0)" style="margin-bottom:8px; background:#d93025;">연차 (-1일)</button>
+      <button onclick="addLeave('오전반차', 0.5)" style="margin-bottom:8px; background:#f9ab00;">오전반차 (-0.5일)</button>
+      <button onclick="addLeave('오후반차', 0.5)" style="margin-bottom:8px; background:#34a853;">오후반차 (-0.5일)</button>
+      <button onclick="removeLeave()" style="margin-bottom:8px; background:#5f6368;">등록 취소 (삭제)</button>
+      <button onclick="closeModal()" style="background:#e0e0e0; color:#333;">닫기</button>
     </div>
   </div>
 
   <script>
-    let employeeDataList = [];
+    let employeeList = [];
+    let currentEmpIndex = null;
+    let selectedDateStr = "";
+    let currentDate = new Date();
+    
+    // 직원별 연차 사용 기록 저장 (이름: { "YYYY-MM-DD": { type: "연차", days: 1.0 } })
+    let leaveRecords = {};
 
-    // 엑셀 파싱 및 다중 시트 통합 읽기
+    // 엑셀 파싱
     document.getElementById('excelFile').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -90,134 +121,191 @@
         try {
           const data = new Uint8Array(evt.target.result);
           const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-          employeeDataList = [];
+          employeeList = [];
 
           workbook.SheetNames.forEach(sheetName => {
-            if (sheetName.includes("직원명부") || sheetName.includes("명부") || sheetName.includes("연차")) {
+            if (sheetName.includes("직원명부") || sheetName.includes("명부")) {
               const sheet = workbook.Sheets[sheetName];
-              // 헤더 위치 자동 감지 (1행 또는 2행)
-              const jsonData = XLSX.utils.sheet_to_json(sheet, { range: sheetName.includes("직원명부") ? 1 : 0 });
-
+              const jsonData = XLSX.utils.sheet_to_json(sheet, { range: 1 });
               jsonData.forEach(row => {
                 const name = row['성명*'] || row['성명'] || row['이름'];
                 let hireDate = row['입사일*'] || row['입사일'];
-
-                if (name && hireDate && name !== '선윤수(예시)') {
+                if (name && hireDate && !String(name).includes('예시')) {
                   if (hireDate instanceof Date) {
                     hireDate = hireDate.toISOString().split('T')[0];
-                  } else if (typeof hireDate === 'string') {
-                    hireDate = hireDate.split(' ')[0];
+                  } else {
+                    hireDate = String(hireDate).split(' ')[0];
                   }
-
-                  const dept = row['소속팀/파트'] || sheetName.replace('①직원명부(', '').replace(')', '').replace('①', '');
-                  
-                  employeeDataList.push({
+                  employeeList.push({
                     name: String(name).trim(),
                     hireDate: String(hireDate).trim(),
-                    dept: String(dept).trim(),
-                    job: row['직종*'] || row['직종'] || '치료사'
+                    dept: row['소속팀/파트'] || sheetName.replace('①직원명부(', '').replace(')', '')
                   });
                 }
               });
             }
           });
 
-          // 만약 특수한 시트 구조가 아닐 경우 단일 시트 기본 읽기
-          if (employeeDataList.length === 0) {
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-            jsonData.forEach(row => {
-              const name = row['이름'] || row['성명'] || row['성명*'];
-              const hireDate = row['입사일'] || row['입사일*'] || row['입사일(YYYY-MM-DD)'];
-              if (name && hireDate) {
-                employeeDataList.push({ name: String(name).trim(), hireDate: String(hireDate).trim(), dept: '기본', job: '' });
-              }
-            });
-          }
-
-          updateEmployeeDropdown();
-        } catch (err) {
-          alert('엑셀 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+          const select = document.getElementById('employeeSelect');
+          select.innerHTML = '<option value="">-- 직원을 선택하세요 --</option>';
+          employeeList.forEach((emp, i) => {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = `${emp.name} (${emp.dept} / 입사: ${emp.hireDate})`;
+            select.appendChild(opt);
+          });
+          select.disabled = false;
+          alert(`총 ${employeeList.length}명의 직원 목록을 불러왔습니다.`);
+        } catch(err) {
+          alert("엑셀 읽기 오류: " + err.message);
         }
       };
       reader.readAsArrayBuffer(file);
     });
 
-    function updateEmployeeDropdown() {
-      const selectElem = document.getElementById('employeeSelect');
-      selectElem.innerHTML = '<option value="">-- 직원을 선택하세요 --</option>';
-
-      if (employeeDataList.length === 0) {
-        alert('엑셀에서 직원 정보를 찾을 수 없습니다.');
-        selectElem.disabled = true;
+    function onEmployeeChange() {
+      const val = document.getElementById('employeeSelect').value;
+      if (val === "") {
+        document.getElementById('statusBoard').style.display = 'none';
+        document.getElementById('calendarCard').style.display = 'none';
         return;
       }
-
-      employeeDataList.forEach((emp, index) => {
-        const opt = document.createElement('option');
-        opt.value = index;
-        opt.textContent = `${emp.name} [${emp.dept}] (입사일: ${emp.hireDate})`;
-        selectElem.appendChild(opt);
-      });
-
-      selectElem.disabled = false;
-      alert(`총 ${employeeDataList.length}명의 직원 명단을 성공적으로 불러왔습니다!`);
+      currentEmpIndex = val;
+      if (!leaveRecords[employeeList[val].name]) {
+        leaveRecords[employeeList[val].name] = {};
+      }
+      document.getElementById('statusBoard').style.display = 'grid';
+      document.getElementById('calendarCard').style.display = 'block';
+      updateLeaveSummary();
+      renderCalendar();
     }
 
-    function calculateLeave(hireDateStr) {
+    // 근속년수 및 연차 계산
+    function calculateLeaveInfo(hireDateStr, empName) {
       const hireDate = new Date(hireDateStr);
       const today = new Date();
-      
       let years = today.getFullYear() - hireDate.getFullYear();
       const m = today.getMonth() - hireDate.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < hireDate.getDate())) {
-        years--;
+      if (m < 0 || (m === 0 && today.getDate() < hireDate.getDate())) years--;
+      
+      let totalLeave = (years < 1) ? 11 : Math.min(25, 15 + Math.floor((years - 1) / 2));
+      
+      // 달력 사용 연차 합산
+      let usedLeave = 0;
+      const records = leaveRecords[empName] || {};
+      for (let date in records) {
+        usedLeave += records[date].days;
       }
 
-      let totalLeave = 0;
-      if (years < 1) {
-        totalLeave = 11; // 1년 미만
-      } else {
-        totalLeave = Math.min(25, 15 + Math.floor((years - 1) / 2)); // 1년 이상
-      }
-
-      const mfLimit = totalLeave >= 17 ? 6 + (totalLeave - 17 + 1) : 6;
-      return { years, totalLeave, mfLimit };
+      return {
+        years: years < 0 ? 0 : years,
+        total: totalLeave,
+        used: usedLeave,
+        remain: totalLeave - usedLeave
+      };
     }
 
-    function validateLeave() {
-      const selectElem = document.getElementById('employeeSelect');
-      const empIndex = selectElem.value;
+    function updateLeaveSummary() {
+      const emp = employeeList[currentEmpIndex];
+      const info = calculateLeaveInfo(emp.hireDate, emp.name);
+      
+      document.getElementById('dispYears').textContent = `${info.years}년차`;
+      document.getElementById('dispTotal').textContent = `${info.total}일`;
+      document.getElementById('dispUsed').textContent = `${info.used}일`;
+      document.getElementById('dispRemain').textContent = `${info.remain}일`;
+    }
 
-      if (empIndex === "") {
-        alert('대상 직원을 선택해 주세요.');
-        return;
+    // 달력 그리기
+    function renderCalendar() {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      document.getElementById('currentMonthStr').textContent = `${year}년 ${month + 1}월`;
+
+      const grid = document.getElementById('calendarGrid');
+      grid.innerHTML = '';
+
+      const dayHeaders = ['일', '월', '화', '수', '목', '금', '토'];
+      dayHeaders.forEach((dh, i) => {
+        const div = document.createElement('div');
+        div.className = `day-header ${i===0?'sun':i===6?'sat':''}`;
+        div.textContent = dh;
+        grid.appendChild(div);
+      });
+
+      const firstDay = new Date(year, month, 1).getDay();
+      const lastDate = new Date(year, month + 1, 0).getDate();
+      const prevLastDate = new Date(year, month, 0).getDate();
+
+      // 이전 달 날짜들
+      for (let i = firstDay - 1; i >= 0; i--) {
+        const div = document.createElement('div');
+        div.className = 'day-cell other-month';
+        div.innerHTML = `<span class="num">${prevLastDate - i}</span>`;
+        grid.appendChild(div);
       }
 
-      const emp = employeeDataList[empIndex];
-      const leaveInfo = calculateLeave(emp.hireDate);
-      const startDate = document.getElementById('startDate').value;
-      const endDate = document.getElementById('endDate').value;
-      const isMonFri = false; // 선택 날짜에 따른 월/금 자동 판단 로직 연동 가능
+      const empName = employeeList[currentEmpIndex].name;
+      const records = leaveRecords[empName] || {};
 
-      let html = `
-        <p><strong>직원명:</strong> ${emp.name} <span class="badge">${emp.dept}</span></p>
-        <p><strong>입사일:</strong> ${emp.hireDate} (근속: ${leaveInfo.years}년차)</p>
-        <p><strong>총 발생 연차:</strong> ${leaveInfo.totalLeave}일</p>
-        <p><strong>월/금 연차 허용 한도:</strong> 연간 ${leaveInfo.mfLimit}회</p>
-        <hr style="border:0; border-top:1px solid #e9ecef; margin:10px 0;">
-      `;
+      // 이번 달 날짜들
+      for (let d = 1; d <= lastDate; d++) {
+        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const dayOfWeek = new Date(year, month, d).getDay();
+        const div = document.createElement('div');
+        
+        let cellClass = 'day-cell';
+        if (dayOfWeek === 0) cellClass += ' sun';
+        if (dayOfWeek === 6) cellClass += ' sat';
+        
+        div.className = cellClass;
+        
+        let badgeHtml = '';
+        if (records[dateStr]) {
+          const type = records[dateStr].type;
+          let badgeClass = 'badge-full';
+          if (type === '오전반차') badgeClass = 'badge-am';
+          if (type === '오후반차') badgeClass = 'badge-pm';
+          badgeHtml = `<div class="leave-badge ${badgeClass}">${type}</div>`;
+        }
 
-      if (!startDate || !endDate) {
-        html += `<p class="warn">⚠️ 신청 기간(시작일/종료일)을 설정하시면 세부 규정 검증 결과가 표시됩니다.</p>`;
-      } else {
-        html += `<p class="info">✅ 규정 검증 완료: 신청하신 기간(${startDate} ~ ${endDate})에 대해 정상 신청이 가능합니다.</p>`;
+        div.innerHTML = `<span class="num">${d}</span>${badgeHtml}`;
+        div.onclick = () => openModal(dateStr);
+        grid.appendChild(div);
       }
+    }
 
-      document.getElementById('reportBox').innerHTML = html;
+    function changeMonth(delta) {
+      currentDate.setMonth(currentDate.getMonth() + delta);
+      renderCalendar();
+    }
+
+    // 모달 관리
+    function openModal(dateStr) {
+      selectedDateStr = dateStr;
+      document.getElementById('modalDateStr').textContent = `${dateStr} 휴가 설정`;
+      document.getElementById('leaveModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('leaveModal').style.display = 'none';
+    }
+
+    function addLeave(type, days) {
+      const empName = employeeList[currentEmpIndex].name;
+      leaveRecords[empName][selectedDateStr] = { type, days };
+      closeModal();
+      updateLeaveSummary();
+      renderCalendar();
+    }
+
+    function removeLeave() {
+      const empName = employeeList[currentEmpIndex].name;
+      delete leaveRecords[empName][selectedDateStr];
+      closeModal();
+      updateLeaveSummary();
+      renderCalendar();
     }
   </script>
 </body>
 </html>
 
-    
