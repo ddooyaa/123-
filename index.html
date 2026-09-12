@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>사내 연차 및 휴가 관리 시스템</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { margin: 0; padding: 15px; background-color: #f5f6f8; color: #333; }
+        .card { background: #fff; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        h2 { font-size: 18px; margin-top: 0; color: #1a73e8; border-bottom: 2px solid #e8f0fe; padding-bottom: 8px; }
+        label { display: block; font-weight: bold; margin: 10px 0 5px; font-size: 14px; }
+        input, select, button { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; margin-bottom: 8px; }
+        button { background-color: #1a73e8; color: white; font-weight: bold; border: none; cursor: pointer; margin-top: 5px; }
+        button:hover { background-color: #1557b0; }
+        .row { display: flex; gap: 10px; }
+        .row > div { flex: 1; }
+        .checkbox-label { display: flex; align-items: center; gap: 8px; font-weight: normal; }
+        .checkbox-label input { width: auto; margin: 0; }
+        .result-box { background: #f8f9fa; border: 1px solid #ddd; padding: 12px; border-radius: 6px; white-space: pre-line; font-size: 13px; line-height: 1.5; }
+        .badge { background: #e8f0fe; color: #1a73e8; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .warn { color: #d93025; font-weight: bold; }
+        .info { color: #1a73e8; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>1. 직원 데이터 업로드 (.xlsx)</h2>
+        <input type="file" id="excelFile" accept=".xlsx, .xls">
+        <small style="color: #666;">* 엑셀 컬럼: [이름, 입사일(YYYY-MM-DD), 무급월수, 월금회수, 공휴일회수, 장기회수, 사용연차]</small>
+    </div>
+
+    <div class="card">
+        <h2>2. 대상 직원 선택</h2>
+        <select id="empSelect" onchange="updateEmpInfo()">
+            <option value="">-- 먼저 엑셀 파일을 업로드하세요 --</option>
+        </select>
+        <div id="selectedEmpDetail" style="font-size: 13px; color: #555; margin-top: 5px;"></div>
+    </div>
+
+    <div class="card">
+        <h2>3. 휴가 신청 및 규정 검증</h2>
+        <label>휴가 구분</label>
+        <select id="leaveType">
+            <option value="연차">연차</option>
+            <option value="반차(AM)">반차(AM)</option>
+            <option value="반차(PM)">반차(PM)</option>
+            <option value="보내기연차">보내기연차</option>
+            <option value="보내기반차(AM)">보내기반차(AM)</option>
+            <option value="보내기반차(PM)">보내기반차(PM)</option>
+            <option value="당일연차">당일연차</option>
+            <option value="당일반차(AM)">당일반차(AM)</option>
+            <option value="당일반차(PM)">당일반차(PM)</option>
+            <option value="종교반차(AM)">종교반차(AM)</option>
+            <option value="종교반차(PM)">종교반차(PM)</option>
+            <option value="예비군(AM)">예비군(AM)</option>
+            <option value="예비군(PM)">예비군(PM)</option>
+            <option value="예비군(종일)">예비군(종일)</option>
+            <option value="예비군(기타)">예비군(기타)</option>
+            <option value="민방위(AM)">민방위(AM)</option>
+            <option value="민방위(PM)">민방위(PM)</option>
+            <option value="경사">경사</option>
+            <option value="조사">조사</option>
+            <option value="교육공가(병원/서티-NDT,연하,인지)">교육공가(병원/서티-NDT,연하,인지)</option>
+        </select>
+
+        <div class="row">
+            <div>
+                <label>시작일</label>
+                <input type="date" id="startDate">
+            </div>
+            <div>
+                <label>종료일</label>
+                <input type="date" id="endDate">
+            </div>
+        </div>
+
+        <label class="checkbox-label">
+            <input type="checkbox" id="isHolidayAdj"> 공휴일 전/후 연차 사용 건
+        </label>
+        <label class="checkbox-label">
+            <input type="checkbox" id="isAdvance"> 잔여 연차 부족 시 당겨쓰기 신청
+        </label>
+
+        <button onclick="processLeave()">규정 검증 실행</button>
+    </div>
+
+    <div class="card">
+        <h2>4. 검증 리포트</h2>
+        <div id="resultReport" class="result-box">검증 결과가 여기에 표시됩니다.</div>
+    </div>
+
+<script>
+    let employees = [];
+
+    // 오늘 날짜 기본 세팅
+    const todayStr = new Date().toISOString().substring(0, 10);
+    document.getElementById('startDate').value = todayStr;
+    document.getElementById('endDate').value = todayStr;
+
+    // 엑셀 파싱
+    document.getElementById('excelFile').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+
+            employees = [];
+            jsonData.forEach((row, idx) => {
+                if (idx === 0 || !row[0]) return; // 헤더 및 빈행 스킵
+                const name = String(row[0]).trim();
+                if (name.includes("이름") || name.includes("성명")) return;
+
+                let hireStr = row[1];
+                if (typeof hireStr === 'number') {
+                    hireStr = XLSX.SSF.format('YYYY-MM-DD', hireStr);
+                } else {
+                    hireStr = String(hireStr).split(' ')[0].trim();
+                }
+
+                const unpaid = parseInt(row[2]) || 0;
+                const tenureInfo = calcLeave(hireStr, unpaid);
+
+                employees.push({
+                    name: name,
+                    hireDate: tenureInfo.hireStr,
+                    tenure: tenureInfo.tenure,
+                    totalLeave: tenureInfo.totalLeave,
+                    mfCnt: parseInt(row[3]) || 0,
+                    holCnt: parseInt(row[4]) || 0,
+                    longCnt: parseInt(row[5]) || 0,
+                    usedDays: parseFloat(row[6]) || 0.0
+                });
+            });
+
+            renderSelect();
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    function calcLeave(hireDateStr, unpaidMonths) {
+        const today = new Date();
+        const hireDate = new Date(hireDateStr);
+        let tenure = today.getFullYear() - hireDate.getFullYear();
+        
+        const mDiff = today.getMonth() - hireDate.getMonth();
+        if (mDiff < 0 || (mDiff === 0 && today.getDate() < hireDate.getDate())) {
+            tenure--;
+        }
+
+        let totalLeave = 0;
+        let actualTenure = 1;
+
+        if (tenure < 1) {
+            totalLeave = Math.max(0, 11 - unpaidMonths);
+            actualTenure = 1;
+        } else {
+            actualTenure = tenure + 1;
+            totalLeave = Math.min(25, 15 + Math.floor((actualTenure - 1) / 2));
+        }
+
+        return { tenure: actualTenure, totalLeave: totalLeave, hireStr: hireDateStr };
+    }
+
+    function renderSelect() {
+        const select = document.getElementById('empSelect');
+        select.innerHTML = '<option value="">-- 직원을 선택하세요 --</option>';
+        employees.forEach((emp, index) => {
+            select.innerHTML += `<option value="${index}">${emp.name} (${emp.tenure}년차)</option>`;
+        });
+        if (employees.length > 0) {
+            alert(`총 ${employees.length}명의 직원 데이터를 성공적으로 로드했습니다.`);
+        }
+    }
+
+    function updateEmpInfo() {
+        const idx = document.getElementById('empSelect').value;
+        const detailDiv = document.getElementById('selectedEmpDetail');
+        if (idx === "") {
+            detailDiv.innerHTML = "";
+            return;
+        }
+        const emp = employees[idx];
+        const rem = emp.totalLeave - emp.usedDays;
+        detailDiv.innerHTML = `📌 <b>입사일:</b> ${emp.hireDate} | <b>총연차:</b> ${emp.totalLeave}일 | <b>사용:</b> ${emp.usedDays}일 | <b class="info">잔여: ${rem}일</b><br>
+        📊 <b>월금카운트:</b> ${emp.mfCnt}회 | <b>공휴일:</b> ${emp.holCnt}회 | <b>장기휴가:</b> ${emp.longCnt}회`;
+    }
+
+    function processLeave() {
+        const idx = document.getElementById('empSelect').value;
+        if (idx === "") {
+            alert("검증할 직원을 먼저 선택해주세요.");
+            return;
+        }
+
+        const emp = employees[idx];
+        const leaveType = document.getElementById('leaveType').value;
+        const startStr = document.getElementById('startDate').value;
+        const endStr = document.getElementById('endDate').value;
+        const isHolidayAdj = document.getElementById('isHolidayAdj').checked;
+        const isAdvance = document.getElementById('isAdvance').checked;
+
+        if (!startStr || !endStr) {
+            alert("시작일과 종료일을 정확히 입력해주세요.");
+            return;
+        }
+
+        const startDate = new Date(startStr);
+        const endDate = new Date(endStr);
+        const timeDiff = endDate.getTime() - startDate.getTime();
+        const daysRequested = Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
+
+        if (daysRequested <= 0) {
+            alert("종료일은 시작일보다 이전일 수 없습니다.");
+            return;
+        }
+
+        let logs = [];
+        let warnings = [];
+
+        // 차감 연차 계산
+        let deductDays = 0.0;
+        if (leaveType.includes("반차")) {
+            deductDays = 0.5 * daysRequested;
+        } else if (["연차", "보내기연차", "당일연차"].includes(leaveType)) {
+            deductDays = 1.0 * daysRequested;
+        }
+
+        // 당일 연차 서류
+        if (leaveType.includes("당일")) {
+            warnings.push("★ [당일 사용] 당일 연차/반차 신청 건입니다. 증빙 서류 첨부가 필요합니다.");
+        }
+
+        // 월/금 카운팅
+        const exceptionTypes = ["경사", "조사", "교육공가(병원/서티-NDT,연하,인지)"];
+        if (!exceptionTypes.includes(leaveType)) {
+            let hasMonFri = false;
+            let cur = new Date(startDate);
+            while (cur <= endDate) {
+                const day = cur.getDay(); // 1:월, 5:금
+                if (day === 1 || day === 5) {
+                    hasMonFri = true;
+                    break;
+                }
+                cur.setDate(cur.getDate() + 1);
+            }
+
+            if (hasMonFri) {
+                const maxMfAllowed = 6 + (emp.totalLeave >= 17 ? (emp.totalLeave - 17 + 1) : 0);
+                logs.push(`[월/금 카운팅 (3월~내년2월)] 허용: ${maxMfAllowed}회 (현재: ${emp.mfCnt}회)`);
+                if (emp.mfCnt >= maxMfAllowed) {
+                    warnings.push(`⚠️ [월/금 초과] 허용 횟수(${maxMfAllowed}회)를 초과했습니다.`);
+                }
+            }
+        }
+
+        // 공휴일 전/후
+        if (isHolidayAdj) {
+            if (leaveType.includes("보내기")) {
+                logs.push(`[${leaveType}] '보내기' 건이므로 공휴일 카운팅 제외 대상입니다.`);
+            } else {
+                logs.push(`[공휴일 카운팅 (3월~내년2월)] 허용: 연 1회 (현재: ${emp.holCnt}회)`);
+                if (emp.holCnt >= 1) {
+                    warnings.push("⚠️ [공휴일 제한] 일반 연차/반차의 공휴일 전/후 사용은 연 1회를 초과할 수 없습니다.");
+                }
+            }
+        }
+
+        // 잔여 연차
+        const remLeave = emp.totalLeave - emp.usedDays;
+        if (deductDays > remLeave) {
+ if (isAdvance) {
+ warnings.Push(🔔 [Drawing] Due to the lack of remaining annual leave, the scheduled annual/monthly pulling will be carried out. (Requires approval from the manager");
+ } else {
+ warnings.The push ('❌ [lack of annual leave] is less than the application year (${remelave} days).`);
+ }
+ }
+
+ // Output Report
+ let reportHtml = '<b>[${emp.name } Teacher Verification Report]</b>\n';
+ reportHtml += ' • <b>Applications:</b>${leaveType} (${daysRequested} days)\n';
+ reportHtml += ' • <b> scheduled to be borrowed:</b> ${deductDays} days (remaining: ${remLeave} days)\n\n';
+ reportHtml += '<b>[Regulation check result]</b>\n';
+        
+ if (logs.length > 0) {
+ logs.forEach(l => reportHtml += `• ${l}\n`);
+ } else {
+ reportHtml += ' • No separate count limit\n';
+ }
+
+ if (warnings.length > 0) {
+ reportHtml += '\n<span class="warn"><b>[Caution and approval required]</b></span>\n';
+ warnings.forEach(w => reportHtml += `<span class="warn">• ${w}</span>\n`);
+ } else {
+ reportHtml += '\n<span class="info"><b>✅ All regulations are normal.</b></span>`;
+ }
+
+ document.getElementById('resultReport').innerHTML = reportHtml;
+ }
+</script>
+</body>
+</html>
