@@ -18,32 +18,33 @@
     .nav-tabs button { flex: 1; padding: 12px; background: #e8f0fe; color: #1a73e8; border-radius: 8px; font-weight: bold; }
     .nav-tabs button.active { background: #1a73e8; color: white; }
 
-    /* 전체 달력 스타일 */
+    /* 대형 달력 스타일 */
     .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .calendar-header h3 { margin: 0; font-size: 16px; }
     .calendar-header button { width: auto; padding: 6px 14px; margin: 0; }
     .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-    .day-header { font-weight: bold; padding: 6px 0; font-size: 12px; text-align: center; background: #eee; border-radius: 4px; }
+    .day-header { font-weight: bold; padding: 8px 0; font-size: 13px; text-align: center; background: #eee; border-radius: 4px; }
     .day-header.sun { color: #d93025; }
     .day-header.sat { color: #1a73e8; }
     
-    .day-cell { min-height: 95px; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; cursor: pointer; display: flex; flex-direction: column; }
+    .day-cell { min-height: 120px; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; cursor: pointer; display: flex; flex-direction: column; overflow-y: auto; }
     .day-cell.other-month { opacity: 0.3; background: #fafafa; }
     .day-cell.holiday { background-color: #fce8e6; }
-    .day-cell .num { font-size: 11px; font-weight: bold; margin-bottom: 2px; }
+    .day-cell .num { font-size: 12px; font-weight: bold; margin-bottom: 2px; }
     .day-cell.sun .num, .day-cell.holiday .num { color: #d93025; }
     .day-cell.sat .num { color: #1a73e8; }
     
-    .holiday-name { font-size: 9px; color: #d93025; font-weight: bold; margin-bottom: 4px; line-height: 1; }
+    .holiday-name { font-size: 10px; color: #d93025; font-weight: bold; margin-bottom: 4px; line-height: 1; }
 
     /* 달력 내부 휴가 태그 */
-    .leave-tag { font-size: 10px; padding: 2px 4px; border-radius: 3px; color: white; margin-bottom: 2px; line-height: 1.2; word-break: break-all; }
+    .leave-tag { font-size: 10px; padding: 3px 5px; border-radius: 3px; color: white; margin-bottom: 3px; line-height: 1.2; word-break: break-all; }
     .tag-annual { background-color: #d93025; }
     .tag-half { background-color: #f9ab00; }
     .tag-today { background-color: #e67c73; font-weight: bold; border: 1px dashed #fff; }
     .tag-etc { background-color: #3b78e7; }
     .tag-edu { background-color: #00897b; }
     .tag-unpaid { background-color: #5f6368; }
+    .tag-send { background-color: #8e24aa; }
 
     /* 현황 테이블 */
     table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
@@ -53,7 +54,9 @@
 
     /* 모달 */
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
-    .modal-content { background: #fff; padding: 20px; border-radius: 12px; width: 90%; max-width: 360px; max-height: 90vh; overflow-y: auto; }
+    .modal-content { background: #fff; padding: 20px; border-radius: 12px; width: 92%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
+    .delete-item { display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; border: 1px solid #ddd; padding: 6px 10px; border-radius: 6px; margin-bottom: 6px; font-size: 12px; }
+    .delete-item button { width: auto; padding: 2px 8px; margin: 0; background: #d93025; font-size: 11px; }
   </style>
 </head>
 <body>
@@ -108,11 +111,17 @@
     </div>
   </div>
 
-  <!-- 연차 등록 모달 -->
+  <!-- 연차 등록 및 삭제 모달 -->
   <div class="modal" id="leaveModal">
     <div class="modal-content">
-      <h3 id="modalDateStr" style="margin-top:0;">휴가 신청</h3>
+      <h3 id="modalDateStr" style="margin-top:0;">휴가 관리</h3>
+
+      <!-- 등록된 휴가 목록 및 삭제 -->
+      <div id="existingLeavesBox" style="margin-bottom: 12px;"></div>
       
+      <hr style="border:0; border-top:1px solid #eee; margin:12px 0;">
+      <h4 style="margin:0 0 8px 0; font-size:14px; color:#1a73e8;">신규 휴가 등록</h4>
+
       <label>대상 직원 선택</label>
       <select id="modalEmpSelect">
         <option value="">-- 직원을 선택하세요 --</option>
@@ -130,8 +139,8 @@
           <option value="교육반차(AM)|0.5">교육반차(AM) (-0.5) 📚</option>
           <option value="교육반차(PM)|0.5">교육반차(PM) (-0.5) 📚</option>
         </optgroup>
-        <optgroup label="무급휴가 (만근 미달 시 월차 생성 차감)">
-          <option value="무급휴가|0.0">무급휴가 (월차 미발생)</option>
+        <optgroup label="무급휴가 (월차 미발생)">
+          <option value="무급휴가|0.0">무급휴가</option>
           <option value="무급반차(AM)|0.0">무급반차(AM)</option>
           <option value="무급반차(PM)|0.0">무급반차(PM)</option>
         </optgroup>
@@ -152,7 +161,7 @@
           <option value="민방위(AM)|0.0">민방위(AM)</option>
           <option value="민방위(PM)|0.0">민방위(PM)</option>
         </optgroup>
-        <optgroup label="경조사 / 특별">
+        <optgroup label="경조사 / Special">
           <option value="경사|0.0">경사</option>
           <option value="조사|0.0">조사</option>
           <option value="(생)|0.0">(생)</option>
@@ -166,7 +175,11 @@
         </optgroup>
       </select>
 
-      <div style="margin-top:12px;">
+      <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin-bottom:12px; font-size:13px;">
+        <input type="checkbox" id="excludeCountingChk" style="width:auto; margin:0;"> ☑️ 월/금 및 공휴일 카운팅 제외
+      </label>
+
+      <div>
         <button onclick="submitLeave()" style="background:#1a73e8;">등록하기</button>
         <button onclick="closeModal()" style="background:#e0e0e0; color:#333;">취소</button>
       </div>
@@ -179,10 +192,9 @@
     let currentDate = new Date();
     let selectedDateStr = "";
 
-    // 대한민국 주요 공휴일 데이터
     const holidays = {
       "2025-01-01": "신정", "2025-01-28": "설날연휴", "2025-01-29": "설날", "2025-01-30": "설날연휴",
-      "2025-03-01": "삼일절", "2025-03-03": "대체공휴일", "2025-05-05": "어린이날/부처님오신날",
+      "2025-03-01": "삼일절", "2025-03-03": "대체공휴일", "2025-05-05": "어린이날",
       "2025-06-06": "현충일", "2025-08-15": "광복절", "2025-10-03": "개천절", "2025-10-05": "추석연휴",
       "2025-10-06": "추석", "2025-10-07": "추석연휴", "2025-10-08": "대체공휴일", "2025-10-09": "한글날", "2025-12-25": "성탄절",
       "2026-01-01": "신정", "2026-02-16": "설날연휴", "2026-02-17": "설날", "2026-02-18": "설날연휴",
@@ -258,8 +270,7 @@
 
     function isHoliday(dateStr) {
       const d = new Date(dateStr);
-      const day = d.getDay();
-      return day === 0 || holidays[dateStr] !== undefined; // 일요일 또는 법정공휴일
+      return d.getDay() === 0 || holidays[dateStr] !== undefined;
     }
 
     function getEmployeeStats(emp) {
@@ -279,40 +290,80 @@
 
       let totalLeave = (years < 1) ? Math.max(0, 11 - unpaidCount) : Math.min(25, 15 + Math.floor((years - 1) / 2));
       let mfLimit = totalLeave >= 17 ? 6 + (totalLeave - 17 + 1) : 6;
-      let longLeaveLimit = years >= 3 ? 3 : 2; // 근속 3년 이상 3회, 미만 2회
+      let longLeaveLimit = years >= 3 ? 3 : 2;
 
       let usedDays = 0;
       let mfCount = 0;
-      let holidayAdjCount = 0;
-      let longLeaveCount = 0;
 
-      empEvents.forEach((e, idx) => {
+      empEvents.forEach((e) => {
         if (!e.type.includes('무급')) usedDays += e.days;
+
+        if (e.excludeCounting) return;
 
         const dateObj = new Date(e.date);
         const dayOfWeek = dateObj.getDay();
-        const isEdu = e.type.includes('교육');
-        const isFamilyEvent = e.type.includes('경사') || e.type.includes('조사');
 
-        // 월/금 카운팅
-        if ((dayOfWeek === 1 || dayOfWeek === 5) && !isFamilyEvent && !isEdu) {
-          mfCount++;
+        const isExemptType = e.type.includes('경사') || e.type.includes('조사') || e.type.includes('(생)') || e.type.includes('(추)') || e.type.includes('보내기') || e.type.includes('교육');
+
+        let isUnconnectedHalf = false;
+        if (e.type.includes('반차')) {
+          if (dayOfWeek === 5 && e.type.includes('AM')) isUnconnectedHalf = true;
+          if (dayOfWeek === 1 && e.type.includes('PM')) isUnconnectedHalf = true;
         }
 
-        // 공휴일 연접 카운팅 (보내기연차 및 비연결 반차 제외)
-        if (!e.type.includes('보내기') && !e.type.includes('반차')) {
-          const prevDateStr = new Date(dateObj.getTime() - 86400000).toISOString().split('T')[0];
-          const nextDateStr = new Date(dateObj.getTime() + 86400000).toISOString().split('T')[0];
-          if (isHoliday(prevDateStr) || isHoliday(nextDateStr)) {
-            holidayAdjCount++;
-          }
+        if ((dayOfWeek === 1 || dayOfWeek === 5) && !isExemptType && !isUnconnectedHalf) {
+          mfCount++;
         }
       });
 
-      // 장기휴가 계산 (연속 2~5일 사용)
+      // 공휴일 연접 단일 카운팅 로직 (2일 이상 연속 휴가 블록 당 공휴일 겹침 총 1회 카운팅)
+      let holidayAdjCount = 0;
+      let leaveBlocks = [];
+      let currentBlock = [];
+
+      empEvents.forEach(e => {
+        if (e.excludeCounting || e.type.includes('보내기') || e.type.includes('반차') || e.type.includes('경사') || e.type.includes('조사') || e.type.includes('(생)') || e.type.includes('(추)')) return;
+
+        if (currentBlock.length === 0) {
+          currentBlock.push(e);
+        } else {
+          const prevDate = new Date(currentBlock[currentBlock.length - 1].date);
+          const currDate = new Date(e.date);
+          const diffDays = (currDate - prevDate) / (1000 * 60 * 60 * 24);
+
+          // 연속 연차 또는 공휴일/주말을 건너뛴 연속 휴가 블록 묶기
+          if (diffDays === 1 || diffDays <= 4) { 
+            currentBlock.push(e);
+          } else {
+            leaveBlocks.push(currentBlock);
+            currentBlock = [e];
+          }
+        }
+      });
+      if (currentBlock.length > 0) leaveBlocks.push(currentBlock);
+
+      // 각 휴가 블록별로 공휴일과 하나라도 연접하거나 겹치면 해당 블록 전체에 대해 1회만 카운팅
+      leaveBlocks.forEach(block => {
+        let isBlockAdjacentToHoliday = false;
+        block.forEach(e => {
+          const dateObj = new Date(e.date);
+          const prevDateStr = new Date(dateObj.getTime() - 86400000).toISOString().split('T')[0];
+          const nextDateStr = new Date(dateObj.getTime() + 86400000).toISOString().split('T')[0];
+          
+          if (isHoliday(e.date) || isHoliday(prevDateStr) || isHoliday(nextDateStr)) {
+            isBlockAdjacentToHoliday = true;
+          }
+        });
+        if (isBlockAdjacentToHoliday) {
+          holidayAdjCount++; // 블록당 1회만 증가
+        }
+      });
+
+      // 장기휴가 계산
+      let longLeaveCount = 0;
       let consecutiveGroup = [];
       empEvents.forEach((e) => {
-        if (e.type.includes('연차') || e.type.includes('예비군')) {
+        if ((e.type.includes('연차') || e.type.includes('예비군')) && !e.type.includes('보내기')) {
           if (consecutiveGroup.length === 0) {
             consecutiveGroup.push(e);
           } else {
@@ -320,36 +371,28 @@
             const curr = new Date(e.date);
             const diffDays = (curr - prev) / (1000 * 60 * 60 * 24);
             
-            // 주말 포함 연속성 체크
             if (diffDays === 1 || (diffDays === 3 && (prev.getDay() === 5 && curr.getDay() === 1))) {
               consecutiveGroup.push(e);
             } else {
-              evaluateLongLeave(consecutiveGroup);
+              if (evaluateLongLeave(consecutiveGroup)) longLeaveCount++;
               consecutiveGroup = [e];
             }
           }
         }
       });
-      if (consecutiveGroup.length > 0) evaluateLongLeave(consecutiveGroup);
+      if (consecutiveGroup.length > 0 && evaluateLongLeave(consecutiveGroup)) longLeaveCount++;
 
       function evaluateLongLeave(group) {
         if (group.length >= 2 && group.length <= 5) {
-          // 예외 1: 연차 + 보내기연차 조합 제외
-          const hasSend = group.some(item => item.type.includes('보내기'));
-          if (hasSend) return;
-
-          // 예외 2: 화-수, 수-목 평일 2일 제한적 사용 제외
+          if (group.every(item => item.type.includes('보내기'))) return false;
           if (group.length === 2) {
             const d1 = new Date(group[0].date).getDay();
             const d2 = new Date(group[1].date).getDay();
-            if ((d1 === 2 && d2 === 3) || (d1 === 3 && d2 === 4)) {
-              return; // 장기휴가 카운팅 제외
-            }
+            if ((d1 === 2 && d2 === 3) || (d1 === 3 && d2 === 4)) return false;
           }
-
-          // 예비군+연차 및 주말 연접 연차는 정상 장기휴가로 카운팅
-          longLeaveCount++;
+          return true;
         }
+        return false;
       }
 
       return {
@@ -460,7 +503,27 @@
 
     function openModal(dateStr) {
       selectedDateStr = dateStr;
-      document.getElementById('modalDateStr').textContent = `${dateStr} 휴가 등록`;
+      document.getElementById('modalDateStr').textContent = `${dateStr} 휴가 관리`;
+      
+      const existingBox = document.getElementById('existingLeavesBox');
+      const dayEvents = leaveEvents.filter(e => e.date === dateStr);
+      
+      if (dayEvents.length === 0) {
+        existingBox.innerHTML = '<p style="font-size:12px; color:#888; margin:0;">등록된 휴가가 없습니다.</p>';
+      } else {
+        let html = '<p style="font-size:12px; font-weight:bold; margin:0 0 6px 0;">등록된 휴가 (클릭 시 삭제):</p>';
+        dayEvents.forEach(e => {
+          html += `
+            <div class="delete-item">
+              <span><strong>${e.empName}</strong>: ${e.type}</span>
+              <button onclick="deleteLeave(${e.id})">삭제</button>
+            </div>
+          `;
+        });
+        existingBox.innerHTML = html;
+      }
+
+      document.getElementById('excludeCountingChk').checked = false;
       document.getElementById('leaveModal').style.display = 'flex';
     }
 
@@ -471,6 +534,7 @@
     function submitLeave() {
       const empName = document.getElementById('modalEmpSelect').value;
       const typeVal = document.getElementById('leaveTypeSelect').value;
+      const excludeCounting = document.getElementById('excludeCountingChk').checked;
 
       if (!empName) {
         alert('대상 직원을 선택하세요.');
@@ -485,13 +549,22 @@
       }
 
       leaveEvents.push({
+        id: Date.now() + Math.random(),
         empName,
         date: selectedDateStr,
         type,
-        days
+        days,
+        excludeCounting
       });
 
       closeModal();
+      renderCalendar();
+      renderSummaryTable();
+    }
+
+    function deleteLeave(id) {
+      leaveEvents = leaveEvents.filter(e => e.id !== id);
+      openModal(selectedDateStr);
       renderCalendar();
       renderSummaryTable();
     }
@@ -499,5 +572,4 @@
 </body>
 </html>
 
-      
-          
+        
