@@ -57,6 +57,9 @@
     .modal-content { background: #fff; padding: 20px; border-radius: 12px; width: 92%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
     .delete-item { display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; border: 1px solid #ddd; padding: 6px 10px; border-radius: 6px; margin-bottom: 6px; font-size: 12px; }
     .delete-item button { width: auto; padding: 2px 8px; margin: 0; background: #d93025; font-size: 11px; }
+    .checkbox-row { display: flex; gap: 12px; margin-bottom: 12px; font-size: 13px; }
+    .checkbox-row label { display: flex; align-items: center; gap: 4px; font-weight: normal; margin: 0; cursor: pointer; }
+    .checkbox-row input { width: auto; margin: 0; }
   </style>
 </head>
 <body>
@@ -134,6 +137,16 @@
           <option value="반차(AM)|0.5">반차(AM) (-0.5)</option>
           <option value="반차(PM)|0.5">반차(PM) (-0.5)</option>
         </optgroup>
+        <optgroup label="당일 연차 / 당일 반차 (서류첨부 필요)">
+          <option value="당일연차|1.0">당일연차 (-1.0) 📎</option>
+          <option value="당일반차(AM)|0.5">당일반차(AM) (-0.5) 📎</option>
+          <option value="당일반차(PM)|0.5">당일반차(PM) (-0.5) 📎</option>
+        </optgroup>
+        <optgroup label="공가">
+          <option value="공가(종일)|0.0">공가(종일)</option>
+          <option value="공가(AM)|0.0">공가(AM)</option>
+          <option value="공가(PM)|0.0">공가(PM)</option>
+        </optgroup>
         <optgroup label="교육연차 (서티: NDT, 연하, 인지)">
           <option value="교육연차|1.0">교육연차 (-1.0) 📚</option>
           <option value="교육반차(AM)|0.5">교육반차(AM) (-0.5) 📚</option>
@@ -143,11 +156,6 @@
           <option value="무급휴가|0.0">무급휴가</option>
           <option value="무급반차(AM)|0.0">무급반차(AM)</option>
           <option value="무급반차(PM)|0.0">무급반차(PM)</option>
-        </optgroup>
-        <optgroup label="당일 연차 / 당일 반차 (서류첨부 필요)">
-          <option value="당일연차|1.0">당일연차 (-1.0) 📎</option>
-          <option value="당일반차(AM)|0.5">당일반차(AM) (-0.5) 📎</option>
-          <option value="당일반차(PM)|0.5">당일반차(PM) (-0.5) 📎</option>
         </optgroup>
         <optgroup label="종교 / 기타 반차">
           <option value="종교반차(AM)|0.5">종교반차(AM) (-0.5)</option>
@@ -175,9 +183,10 @@
         </optgroup>
       </select>
 
-      <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin-bottom:12px; font-size:13px;">
-        <input type="checkbox" id="excludeCountingChk" style="width:auto; margin:0;"> ☑️ 월/금 및 공휴일 카운팅 제외
-      </label>
+      <div class="checkbox-row">
+        <label><input type="checkbox" id="excludeMfChk"> ☑️ 월/금 제외</label>
+        <label><input type="checkbox" id="excludeHoliChk"> ☑️ 공휴일 제외</label>
+      </div>
 
       <div>
         <button onclick="submitLeave()" style="background:#1a73e8;">등록하기</button>
@@ -296,14 +305,14 @@
       let mfCount = 0;
 
       empEvents.forEach((e) => {
-        if (!e.type.includes('무급')) usedDays += e.days;
+        if (!e.type.includes('무급') && !e.type.includes('공가')) usedDays += e.days;
 
-        if (e.excludeCounting) return;
+        if (e.excludeMf) return;
 
         const dateObj = new Date(e.date);
         const dayOfWeek = dateObj.getDay();
 
-        const isExemptType = e.type.includes('경사') || e.type.includes('조사') || e.type.includes('(생)') || e.type.includes('(추)') || e.type.includes('보내기') || e.type.includes('교육');
+        const isExemptType = e.type.includes('경사') || e.type.includes('조사') || e.type.includes('(생)') || e.type.includes('(추)') || e.type.includes('보내기') || e.type.includes('교육') || e.type.includes('공가');
 
         let isUnconnectedHalf = false;
         if (e.type.includes('반차')) {
@@ -311,18 +320,19 @@
           if (dayOfWeek === 1 && e.type.includes('PM')) isUnconnectedHalf = true;
         }
 
+        // 당일연차/당일반차도 월금 카운팅 정상 포함 (단, 독립 반차 제외)
         if ((dayOfWeek === 1 || dayOfWeek === 5) && !isExemptType && !isUnconnectedHalf) {
           mfCount++;
         }
       });
 
-      // 공휴일 연접 단일 카운팅 로직 (2일 이상 연속 휴가 블록 당 공휴일 겹침 총 1회 카운팅)
+      // 공휴일 연접 단일 카운팅 (당일 연차/반차도 정상 카운팅 대상)
       let holidayAdjCount = 0;
       let leaveBlocks = [];
       let currentBlock = [];
 
       empEvents.forEach(e => {
-        if (e.excludeCounting || e.type.includes('보내기') || e.type.includes('반차') || e.type.includes('경사') || e.type.includes('조사') || e.type.includes('(생)') || e.type.includes('(추)')) return;
+        if (e.excludeHoli || e.type.includes('보내기') || e.type.includes('반차') || e.type.includes('경사') || e.type.includes('조사') || e.type.includes('(생)') || e.type.includes('(추)') || e.type.includes('공가')) return;
 
         if (currentBlock.length === 0) {
           currentBlock.push(e);
@@ -331,7 +341,6 @@
           const currDate = new Date(e.date);
           const diffDays = (currDate - prevDate) / (1000 * 60 * 60 * 24);
 
-          // 연속 연차 또는 공휴일/주말을 건너뛴 연속 휴가 블록 묶기
           if (diffDays === 1 || diffDays <= 4) { 
             currentBlock.push(e);
           } else {
@@ -342,7 +351,6 @@
       });
       if (currentBlock.length > 0) leaveBlocks.push(currentBlock);
 
-      // 각 휴가 블록별로 공휴일과 하나라도 연접하거나 겹치면 해당 블록 전체에 대해 1회만 카운팅
       leaveBlocks.forEach(block => {
         let isBlockAdjacentToHoliday = false;
         block.forEach(e => {
@@ -355,7 +363,7 @@
           }
         });
         if (isBlockAdjacentToHoliday) {
-          holidayAdjCount++; // 블록당 1회만 증가
+          holidayAdjCount++;
         }
       });
 
@@ -363,7 +371,8 @@
       let longLeaveCount = 0;
       let consecutiveGroup = [];
       empEvents.forEach((e) => {
-        if ((e.type.includes('연차') || e.type.includes('예비군')) && !e.type.includes('보내기')) {
+        const isLongTarget = e.type.includes('연차') || e.type.includes('당일') || e.type.includes('예비군') || e.type.includes('무급') || e.type.includes('경사') || e.type.includes('조사');
+        if (isLongTarget && !e.type.includes('보내기')) {
           if (consecutiveGroup.length === 0) {
             consecutiveGroup.push(e);
           } else {
@@ -454,7 +463,7 @@
           if (e.type.includes('보내기')) tagClass = 'tag-send';
           if (e.type.includes('교육')) tagClass = 'tag-edu';
           if (e.type.includes('무급')) tagClass = 'tag-unpaid';
-          if (e.type.includes('예비군') || e.type.includes('경사')) tagClass = 'tag-etc';
+          if (e.type.includes('예비군') || e.type.includes('경사') || e.type.includes('공가')) tagClass = 'tag-etc';
 
           tagsHtml += `<div class="leave-tag ${tagClass}">${e.empName}: ${e.type}</div>`;
         });
@@ -523,7 +532,8 @@
         existingBox.innerHTML = html;
       }
 
-      document.getElementById('excludeCountingChk').checked = false;
+      document.getElementById('excludeMfChk').checked = false;
+      document.getElementById('excludeHoliChk').checked = false;
       document.getElementById('leaveModal').style.display = 'flex';
     }
 
@@ -534,7 +544,8 @@
     function submitLeave() {
       const empName = document.getElementById('modalEmpSelect').value;
       const typeVal = document.getElementById('leaveTypeSelect').value;
-      const excludeCounting = document.getElementById('excludeCountingChk').checked;
+      const excludeMf = document.getElementById('excludeMfChk').checked;
+      const excludeHoli = document.getElementById('excludeHoliChk').checked;
 
       if (!empName) {
         alert('대상 직원을 선택하세요.');
@@ -554,7 +565,8 @@
         date: selectedDateStr,
         type,
         days,
-        excludeCounting
+        excludeMf,
+        excludeHoli
       });
 
       closeModal();
@@ -571,5 +583,3 @@
   </script>
 </body>
 </html>
-
-        
