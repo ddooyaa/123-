@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -27,11 +27,14 @@
     .day-header.sun { color: #d93025; }
     .day-header.sat { color: #1a73e8; }
     
-    .day-cell { min-height: 90px; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; cursor: pointer; display: flex; flex-direction: column; }
+    .day-cell { min-height: 95px; background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 4px; cursor: pointer; display: flex; flex-direction: column; }
     .day-cell.other-month { opacity: 0.3; background: #fafafa; }
-    .day-cell .num { font-size: 11px; font-weight: bold; margin-bottom: 4px; }
-    .day-cell.sun .num { color: #d93025; }
+    .day-cell.holiday { background-color: #fce8e6; }
+    .day-cell .num { font-size: 11px; font-weight: bold; margin-bottom: 2px; }
+    .day-cell.sun .num, .day-cell.holiday .num { color: #d93025; }
     .day-cell.sat .num { color: #1a73e8; }
+    
+    .holiday-name { font-size: 9px; color: #d93025; font-weight: bold; margin-bottom: 4px; line-height: 1; }
 
     /* 달력 내부 휴가 태그 */
     .leave-tag { font-size: 10px; padding: 2px 4px; border-radius: 3px; color: white; margin-bottom: 2px; line-height: 1.2; word-break: break-all; }
@@ -94,7 +97,7 @@
               <th>잔여연차</th>
               <th>월금사용/한도</th>
               <th>공휴일연접</th>
-              <th>장기휴가</th>
+              <th>장기휴가/한도</th>
             </tr>
           </thead>
           <tbody id="summaryTableBody">
@@ -176,6 +179,19 @@
     let currentDate = new Date();
     let selectedDateStr = "";
 
+    // 대한민국 주요 공휴일 데이터
+    const holidays = {
+      "2025-01-01": "신정", "2025-01-28": "설날연휴", "2025-01-29": "설날", "2025-01-30": "설날연휴",
+      "2025-03-01": "삼일절", "2025-03-03": "대체공휴일", "2025-05-05": "어린이날/부처님오신날",
+      "2025-06-06": "현충일", "2025-08-15": "광복절", "2025-10-03": "개천절", "2025-10-05": "추석연휴",
+      "2025-10-06": "추석", "2025-10-07": "추석연휴", "2025-10-08": "대체공휴일", "2025-10-09": "한글날", "2025-12-25": "성탄절",
+      "2026-01-01": "신정", "2026-02-16": "설날연휴", "2026-02-17": "설날", "2026-02-18": "설날연휴",
+      "2026-03-01": "삼일절", "2026-03-02": "대체공휴일", "2026-05-05": "어린이날", "2026-05-24": "부처님오신날",
+      "2026-05-25": "대체공휴일", "2026-06-06": "현충일", "2026-08-15": "광복절", "2026-08-17": "대체공휴일",
+      "2026-09-24": "추석연휴", "2026-09-25": "추석", "2026-09-26": "추석연휴", "2026-10-03": "개천절",
+      "2026-10-05": "대체공휴일", "2026-10-09": "한글날", "2026-12-25": "성탄절"
+    };
+
     document.getElementById('excelFile').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -240,6 +256,12 @@
       if (tabIndex === 2) renderSummaryTable();
     }
 
+    function isHoliday(dateStr) {
+      const d = new Date(dateStr);
+      const day = d.getDay();
+      return day === 0 || holidays[dateStr] !== undefined; // 일요일 또는 법정공휴일
+    }
+
     function getEmployeeStats(emp) {
       const hireDate = new Date(emp.hireDate);
       const today = new Date();
@@ -247,44 +269,88 @@
       const m = today.getMonth() - hireDate.getMonth();
       if (m < 0 || (m === 0 && today.getDate() < hireDate.getDate())) years--;
 
-      const empEvents = leaveEvents.filter(e => e.empName === emp.name);
+      const empEvents = leaveEvents.filter(e => e.empName === emp.name).sort((a,b) => new Date(a.date) - new Date(b.date));
       
-      // 무급 사용 월수 집계 (1년 미만 월차 발생 개수 차감용)
       let unpaidCount = 0;
       empEvents.forEach(e => {
         if (e.type.includes('무급휴가')) unpaidCount += 1.0;
         if (e.type.includes('무급반차')) unpaidCount += 0.5;
       });
 
-      let totalLeave = 0;
-      if (years < 1) {
-        // 1년 미만: 만근 시 1개월당 1개 (최대 11개), 무급 사용 시 해당 월 월차 미발생 차감
-        totalLeave = Math.max(0, 11 - unpaidCount);
-      } else {
-        totalLeave = Math.min(25, 15 + Math.floor((years - 1) / 2));
-      }
-
-      // 월금 카운팅 한도: 기본 6회, 연차 17개(근속5년차) 이상부터 +1씩 증가
+      let totalLeave = (years < 1) ? Math.max(0, 11 - unpaidCount) : Math.min(25, 15 + Math.floor((years - 1) / 2));
       let mfLimit = totalLeave >= 17 ? 6 + (totalLeave - 17 + 1) : 6;
+      let longLeaveLimit = years >= 3 ? 3 : 2; // 근속 3년 이상 3회, 미만 2회
 
       let usedDays = 0;
       let mfCount = 0;
+      let holidayAdjCount = 0;
+      let longLeaveCount = 0;
 
-      empEvents.forEach(e => {
-        // 무급휴가는 연차 일수 차감에서 제외
-        if (!e.type.includes('무급')) {
-          usedDays += e.days;
-        }
+      empEvents.forEach((e, idx) => {
+        if (!e.type.includes('무급')) usedDays += e.days;
 
-        // 월/금 카운팅 (경조사, 교육연차/반차 제외)
-        const dayOfWeek = new Date(e.date).getDay();
+        const dateObj = new Date(e.date);
+        const dayOfWeek = dateObj.getDay();
         const isEdu = e.type.includes('교육');
         const isFamilyEvent = e.type.includes('경사') || e.type.includes('조사');
 
+        // 월/금 카운팅
         if ((dayOfWeek === 1 || dayOfWeek === 5) && !isFamilyEvent && !isEdu) {
           mfCount++;
         }
+
+        // 공휴일 연접 카운팅 (보내기연차 및 비연결 반차 제외)
+        if (!e.type.includes('보내기') && !e.type.includes('반차')) {
+          const prevDateStr = new Date(dateObj.getTime() - 86400000).toISOString().split('T')[0];
+          const nextDateStr = new Date(dateObj.getTime() + 86400000).toISOString().split('T')[0];
+          if (isHoliday(prevDateStr) || isHoliday(nextDateStr)) {
+            holidayAdjCount++;
+          }
+        }
       });
+
+      // 장기휴가 계산 (연속 2~5일 사용)
+      let consecutiveGroup = [];
+      empEvents.forEach((e) => {
+        if (e.type.includes('연차') || e.type.includes('예비군')) {
+          if (consecutiveGroup.length === 0) {
+            consecutiveGroup.push(e);
+          } else {
+            const prev = new Date(consecutiveGroup[consecutiveGroup.length - 1].date);
+            const curr = new Date(e.date);
+            const diffDays = (curr - prev) / (1000 * 60 * 60 * 24);
+            
+            // 주말 포함 연속성 체크
+            if (diffDays === 1 || (diffDays === 3 && (prev.getDay() === 5 && curr.getDay() === 1))) {
+              consecutiveGroup.push(e);
+            } else {
+              evaluateLongLeave(consecutiveGroup);
+              consecutiveGroup = [e];
+            }
+          }
+        }
+      });
+      if (consecutiveGroup.length > 0) evaluateLongLeave(consecutiveGroup);
+
+      function evaluateLongLeave(group) {
+        if (group.length >= 2 && group.length <= 5) {
+          // 예외 1: 연차 + 보내기연차 조합 제외
+          const hasSend = group.some(item => item.type.includes('보내기'));
+          if (hasSend) return;
+
+          // 예외 2: 화-수, 수-목 평일 2일 제한적 사용 제외
+          if (group.length === 2) {
+            const d1 = new Date(group[0].date).getDay();
+            const d2 = new Date(group[1].date).getDay();
+            if ((d1 === 2 && d2 === 3) || (d1 === 3 && d2 === 4)) {
+              return; // 장기휴가 카운팅 제외
+            }
+          }
+
+          // 예비군+연차 및 주말 연접 연차는 정상 장기휴가로 카운팅
+          longLeaveCount++;
+        }
+      }
 
       return {
         years: years < 0 ? 0 : years,
@@ -292,7 +358,10 @@
         usedDays,
         remainLeave: totalLeave - usedDays,
         mfCount,
-        mfLimit
+        mfLimit,
+        holidayAdjCount,
+        longLeaveCount,
+        longLeaveLimit
       };
     }
 
@@ -326,9 +395,13 @@
       for (let d = 1; d <= lastDate; d++) {
         const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
         const dayOfWeek = new Date(year, month, d).getDay();
-        const div = document.createElement('div');
-        div.className = `day-cell ${dayOfWeek===0?'sun':dayOfWeek===6?'sat':''}`;
+        const isHoli = holidays[dateStr] !== undefined;
         
+        const div = document.createElement('div');
+        div.className = `day-cell ${dayOfWeek===0?'sun':dayOfWeek===6?'sat':''} ${isHoli?'holiday':''}`;
+        
+        let holiHtml = isHoli ? `<div class="holiday-name">${holidays[dateStr]}</div>` : '';
+
         let tagsHtml = '';
         const dayEvents = leaveEvents.filter(e => e.date === dateStr);
         dayEvents.forEach(e => {
@@ -343,7 +416,7 @@
           tagsHtml += `<div class="leave-tag ${tagClass}">${e.empName}: ${e.type}</div>`;
         });
 
-        div.innerHTML = `<span class="num">${d}</span>${tagsHtml}`;
+        div.innerHTML = `<span class="num">${d}</span>${holiHtml}${tagsHtml}`;
         div.onclick = () => openModal(dateStr);
         grid.appendChild(div);
       }
@@ -365,6 +438,8 @@
       employeeList.forEach(emp => {
         const stats = getEmployeeStats(emp);
         const isOverMf = stats.mfCount > stats.mfLimit;
+        const isOverHoli = stats.holidayAdjCount > 1;
+        const isOverLong = stats.longLeaveCount > stats.longLeaveLimit;
         
         html += `
           <tr>
@@ -375,8 +450,8 @@
             <td>${stats.usedDays}일</td>
             <td class="${stats.remainLeave < 0 ? 'warn-text' : ''}">${stats.remainLeave}일 ${stats.remainLeave < 0 ? '(당겨쓰기 필요/컨펌요망)' : ''}</td>
             <td class="${isOverMf ? 'warn-text' : ''}">${stats.mfCount} / ${stats.mfLimit}회</td>
-            <td>0 / 1회</td>
-            <td>0 / 3회</td>
+            <td class="${isOverHoli ? 'warn-text' : ''}">${stats.holidayAdjCount} / 1회</td>
+            <td class="${isOverLong ? 'warn-text' : ''}">${stats.longLeaveCount} / ${stats.longLeaveLimit}회</td>
           </tr>
         `;
       });
@@ -423,4 +498,6 @@
   </script>
 </body>
 </html>
-   
+
+      
+          
