@@ -16,8 +16,11 @@
 
     /* 탭 메뉴 */
     .nav-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
-    .nav-tabs button { flex: 1; padding: 12px; background: #e8f0fe; color: #1a73e8; border-radius: 8px; font-weight: bold; }
+    .nav-tabs button { flex: 1; padding: 12px 4px; background: #e8f0fe; color: #1a73e8; border-radius: 8px; font-weight: bold; word-break: keep-all; }
     .nav-tabs button.active { background: #1a73e8; color: white; }
+    @media (max-width: 480px) {
+      .nav-tabs button { font-size: 12px; padding: 10px 2px; }
+    }
 
     /* 대형 달력 스타일 */
     .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
