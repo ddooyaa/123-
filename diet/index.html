@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>다이어트 기록</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f5f7fa;--card:#fff;--text:#1d2530;--sub:#6b7686;--pri:#2f7df6;--ok:#22a06b;--warn:#e5484d;--line:#e3e8ef}
+@media(prefers-color-scheme:dark){:root{--bg:#10151c;--card:#1a212b;--text:#e8edf3;--sub:#93a0b2;--line:#2a3441}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,"Noto Sans KR",sans-serif;padding-bottom:76px}
+header{padding:14px 16px;font-weight:700;font-size:18px}
+main{padding:0 16px;max-width:640px;margin:0 auto}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+h3{margin:0 0 10px;font-size:15px}
+label{display:block;font-size:13px;color:var(--sub);margin:8px 0 4px}
+input,select,textarea,button{font:inherit;color:inherit}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+button{border:0;border-radius:10px;padding:10px 14px;background:var(--pri);color:#fff;cursor:pointer}
+button.ghost{background:transparent;color:var(--pri);border:1px solid var(--pri)}
+button.del{background:transparent;color:var(--warn);padding:4px 8px}
+button:disabled{opacity:.5}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+.chk{display:flex;gap:10px;margin-top:10px}
+.chk label{flex:1;display:flex;align-items:center;gap:8px;margin:0;padding:12px;border:1px solid var(--line);border-radius:10px;color:var(--text);font-size:15px}
+.chk input{width:auto}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;color:var(--sub);border-radius:0;padding:12px 0;font-size:13px}
+nav button.on{color:var(--pri);font-weight:700}
+.tab{display:none}.tab.on{display:block}
+.stat{display:flex;gap:8px}.stat div{flex:1;text-align:center;background:var(--bg);border-radius:10px;padding:8px}
+.stat b{display:block;font-size:18px}.stat span{font-size:12px;color:var(--sub)}
+.up{color:var(--warn)}.down{color:var(--ok)}
+.item{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.item:last-child{border:0}
+.item img{width:72px;height:72px;object-fit:cover;border-radius:10px}
+.item .grow{flex:1;min-width:0}
+.sub{color:var(--sub);font-size:13px}
+.seg{display:flex;gap:6px;margin-bottom:10px}.seg button{flex:1;background:var(--bg);color:var(--sub)}.seg button.on{background:var(--pri);color:#fff}
+canvas{max-height:280px}
+#prev{width:100%;border-radius:10px;margin-top:8px;display:none}
+.msg{font-size:13px;color:var(--sub);margin-top:6px}
+</style>
+</head>
+<body>
+<header>🥗 다이어트 기록</header>
+<main>
+
+<section class="tab on" id="t-today">
+  <div class="card">
+    <h3>날짜</h3>
+    <input type="date" id="date">
+    <label>체중 (kg)</label>
+    <input type="number" id="weight" step="0.1" inputmode="decimal" placeholder="예: 68.5">
+    <div class="chk">
+      <label><input type="checkbox" id="ex"> 🏃 운동함</label>
+      <label><input type="checkbox" id="dr"> 🍺 음주함</label>
+    </div>
+    <button style="margin-top:12px;width:100%" id="saveDay">저장</button>
+    <div class="msg" id="dayMsg"></div>
+  </div>
+  <div class="card">
+    <h3>이 날의 요약</h3>
+    <div class="stat">
+      <div><b id="sKcal">0</b><span>섭취 kcal</span></div>
+      <div><b id="sMeals">0</b><span>식사 수</span></div>
+      <div><b id="sWk">0</b><span>운동 분</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="tab" id="t-weight">
+  <div class="card">
+    <div class="seg"><button id="mDaily" class="on">일별</button><button id="mMonthly">월별(평균)</button></div>
+    <div class="row" id="monthPick"><input type="month" id="month"></div>
+    <div style="margin-top:10px"><canvas id="chart"></canvas></div>
+    <div class="stat" style="margin-top:10px">
+      <div><b id="wLast">-</b><span>최근</span></div>
+      <div><b id="wDiff">-</b><span>직전 대비</span></div>
+      <div><b id="wRange">-</b><span>기간 증감</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="tab" id="t-meal">
+  <div class="card">
+    <h3>식단 분석</h3>
+    <div class="row">
+      <button id="btnCam">📷 촬영</button>
+      <button id="btnUp" class="ghost">🖼 사진 업로드</button>
+    </div>
+    <input type="file" id="fCam" accept="image/*" capture="environment" hidden>
+    <input type="file" id="fUp" accept="image/*" hidden>
+    <img id="prev" alt="">
+    <label>먹은 시간</label>
+    <input type="datetime-local" id="mealTime">
+    <label>메모 (선택, 분석 정확도 향상)</label>
+    <input id="mealNote" placeholder="예: 밥 1공기 반, 국 제외">
+    <button id="btnAnalyze" style="margin-top:10px;width:100%" disabled>분석하고 저장</button>
+    <div class="msg" id="mealMsg"></div>
+  </div>
+  <div class="card"><h3>식단 기록</h3><div id="mealList"></div></div>
+</section>
+
+<section class="tab" id="t-workout">
+  <div class="card">
+    <h3>운동 기록</h3>
+    <label>운동 종류</label>
+    <input id="wType" list="wTypes" placeholder="예: 러닝, 웨이트, 요가">
+    <datalist id="wTypes"><option>러닝</option><option>걷기</option><option>웨이트</option><option>자전거</option><option>수영</option><option>요가</option><option>필라테스</option><option>등산</option></datalist>
+    <div class="row">
+      <div><label>시간(분)</label><input type="number" id="wMin" inputmode="numeric"></div>
+      <div><label>날짜</label><input type="date" id="wDate"></div>
+    </div>
+    <label>메모</label>
+    <input id="wNote" placeholder="예: 5km, 스쿼트 3세트">
+    <button id="addWk" style="margin-top:10px;width:100%">추가</button>
+  </div>
+  <div class="card"><h3>운동 목록</h3><div id="wkList"></div></div>
+</section>
+
+<section class="tab" id="t-set">
+  <div class="card">
+    <h3>설정</h3>
+    <label>Anthropic API 키 (사진 분석용)</label>
+    <input type="password" id="key" placeholder="sk-ant-..." autocomplete="off">
+    <button id="saveKey" style="margin-top:10px;width:100%">키 저장</button>
+    <div class="msg">키는 이 기기의 브라우저에만 저장되며, 분석 시 api.anthropic.com으로만 전송됩니다. 개인 기기에서만 사용하세요.</div>
+  </div>
+  <div class="card">
+    <h3>데이터</h3>
+    <div class="row"><button class="ghost" id="exp">내보내기(JSON)</button><button class="ghost" id="imp">가져오기</button></div>
+    <input type="file" id="fImp" accept="application/json" hidden>
+  </div>
+</section>
+
+</main>
+<nav>
+  <button data-t="today" class="on">오늘</button>
+  <button data-t="weight">체중</button>
+  <button data-t="meal">식단</button>
+  <button data-t="workout">운동</button>
+  <button data-t="set">설정</button>
+</nav>
+
+<script>
+const MODEL='claude-sonnet-5-5';
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const ymdhm=d=>`${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
+const save=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+
+let days=load('days',{});        // {date:{weight,ex,dr}}
+let workouts=load('workouts',[]);// [{id,date,type,min,note}]
+
+/* ---------- IndexedDB (meals) ---------- */
+let db;
+const dbReady=new Promise((res,rej)=>{
+  const r=indexedDB.open('diet',1);
+  r.onupgradeneeded=()=>r.result.createObjectStore('meals',{keyPath:'id'});
+  r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>rej(r.error);
+});
+const store=m=>db.transaction('meals',m).objectStore('meals');
+const req=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const allMeals=()=>req(store('readonly').getAll());
+const putMeal=m=>req(store('readwrite').put(m));
+const delMeal=id=>req(store('readwrite').delete(id));
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id==='t-'+b.dataset.t));
+  if(b.dataset.t==='weight')drawChart();
+  if(b.dataset.t==='meal')renderMeals();
+  if(b.dataset.t==='workout')renderWk();
+});
+
+/* ---------- today ---------- */
+$('date').value=ymd(new Date());
+function fillDay(){
+  const d=days[$('date').value]||{};
+  $('weight').value=d.weight??'';$('ex').checked=!!d.ex;$('dr').checked=!!d.dr;
+  summary();
+}
+async function summary(){
+  const dt=$('date').value;
+  const ms=(await allMeals()).filter(m=>m.time.slice(0,10)===dt);
+  $('sKcal').textContent=ms.reduce((a,m)=>a+(m.total||0),0);
+  $('sMeals').textContent=ms.length;
+  $('sWk').textContent=workouts.filter(w=>w.date===dt).reduce((a,w)=>a+(+w.min||0),0);
+}
+$('date').onchange=fillDay;
+$('saveDay').onclick=()=>{
+  const dt=$('date').value;if(!dt)return;
+  const w=parseFloat($('weight').value);
+  days[dt]={weight:isNaN(w)?undefined:w,ex:$('ex').checked,dr:$('dr').checked};
+  save('days',days);$('dayMsg').textContent='저장됨';setTimeout(()=>$('dayMsg').textContent='',1500);
+};
+
+/* ---------- weight chart ---------- */
+let mode='daily',chart;
+$('month').value=ymd(new Date()).slice(0,7);
+$('mDaily').onclick=()=>{mode='daily';$('mDaily').classList.add('on');$('mMonthly').classList.remove('on');$('monthPick').style.display='';drawChart()};
+$('mMonthly').onclick=()=>{mode='monthly';$('mMonthly').classList.add('on');$('mDaily').classList.remove('on');$('monthPick').style.display='none';drawChart()};
+$('month').onchange=drawChart;
+const wEntries=()=>Object.entries(days).filter(([,v])=>typeof v.weight==='number').sort((a,b)=>a[0]<b[0]?-1:1);
+function drawChart(){
+  const all=wEntries();let labels,data;
+  if(mode==='daily'){
+    const m=$('month').value;
+    const rows=all.filter(([d])=>d.startsWith(m));
+    labels=rows.map(([d])=>d.slice(8)+'일');data=rows.map(([,v])=>v.weight);
+  }else{
+    const g={};all.forEach(([d,v])=>{(g[d.slice(0,7)]??=[]).push(v.weight)});
+    labels=Object.keys(g);data=labels.map(k=>+(g[k].reduce((a,b)=>a+b,0)/g[k].length).toFixed(2));
+  }
+  chart?.destroy();
+  chart=new Chart($('chart'),{type:'line',data:{labels,datasets:[{label:'체중(kg)',data,borderColor:'#2f7df6',backgroundColor:'rgba(47,125,246,.15)',fill:true,tension:.25,pointRadius:4}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'kg'}}}}});
+  const last=all.at(-1),prev=all.at(-2);
+  $('wLast').textContent=last?last[1].weight+'kg':'-';
+  const fmt=(el,v)=>{el.textContent=v==null?'-':(v>0?'+':'')+v.toFixed(1)+'kg';el.className=v==null?'':v>0?'up':v<0?'down':''};
+  fmt($('wDiff'),last&&prev?last[1].weight-prev[1].weight:null);
+  fmt($('wRange'),data.length>1?data.at(-1)-data[0]:null);
+}
+
+/* ---------- meals ---------- */
+let photo=null; // {dataUrl, b64, time}
+function resize(file,max){
+  return new Promise((res,rej)=>{
+    const img=new Image(),u=URL.createObjectURL(file);
+    img.onload=()=>{
+      const s=Math.min(1,max/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);
+      res(c.toDataURL('image/jpeg',.8));
+    };
+    img.onerror=()=>rej(new Error('이미지를 읽을 수 없습니다'));img.src=u;
+  });
+}
+async function pick(file,fromCamera){
+  if(!file)return;
+  try{
+    const dataUrl=await resize(file,1024);
+    photo={dataUrl,b64:dataUrl.split(',')[1]};
+    $('prev').src=dataUrl;$('prev').style.display='block';
+    // 촬영=현재 시각, 업로드=사진 파일의 수정 시각(없으면 현재). 수정 가능
+    $('mealTime').value=ymdhm(fromCamera?new Date():new Date(file.lastModified||Date.now()));
+    $('btnAnalyze').disabled=false;$('mealMsg').textContent='';
+  }catch(e){$('mealMsg').textContent=e.message}
+}
+$('btnCam').onclick=()=>{$('fCam').value='';$('fCam').click()};
+$('btnUp').onclick=()=>{$('fUp').value='';$('fUp').click()};
+$('fCam').onchange=e=>pick(e.target.files[0],true);
+$('fUp').onchange=e=>pick(e.target.files[0],false);
+
+async function analyze(b64,note){
+  const key=localStorage.getItem('apikey');
+  if(!key)throw new Error('설정 탭에서 API 키를 먼저 입력하세요');
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{
+    'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01',
+    'anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:MODEL,max_tokens:1024,messages:[{role:'user',content:[
+      {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+      {type:'text',text:`이 식사 사진의 음식을 분석해 JSON만 출력하세요(코드블록 금지). 형식: {"items":[{"name":"메뉴명","portion":"추정 양","kcal":숫자}],"total":숫자,"comment":"한 줄 코멘트"}. kcal은 사진으로 추정한 대략값입니다. 음식이 없으면 items를 빈 배열로, total 0.${note?' 사용자 메모: '+note:''}`}]}]})});
+  const j=await r.json();
+  if(!r.ok)throw new Error(j.error?.message||('API 오류 '+r.status));
+  const t=j.content.map(c=>c.text||'').join('');
+  const m=t.match(/\{[\s\S]*\}/);if(!m)throw new Error('분석 결과를 해석할 수 없습니다');
+  return JSON.parse(m[0]);
+}
+$('btnAnalyze').onclick=async()=>{
+  if(!photo)return;
+  $('btnAnalyze').disabled=true;$('mealMsg').textContent='분석 중...';
+  try{
+    const a=await analyze(photo.b64,$('mealNote').value.trim());
+    const items=Array.isArray(a.items)?a.items:[];
+    const total=Number(a.total)||items.reduce((s,i)=>s+(Number(i.kcal)||0),0);
+    await putMeal({id:Date.now(),time:$('mealTime').value,photo:photo.dataUrl,items,total,comment:a.comment||'',note:$('mealNote').value.trim()});
+    photo=null;$('prev').style.display='none';$('mealNote').value='';$('mealMsg').textContent='저장됨';
+    renderMeals();summary();
+  }catch(e){$('mealMsg').textContent='실패: '+e.message;$('btnAnalyze').disabled=false}
+};
+async function renderMeals(){
+  const ms=(await allMeals()).sort((a,b)=>a.time<b.time?1:-1);
+  $('mealList').innerHTML=ms.length?ms.map(m=>`<div class="item"><img src="${m.photo}" alt="">
+    <div class="grow"><b>${esc(m.time.replace('T',' '))}</b> · ${m.total} kcal
+    <div class="sub">${m.items.map(i=>`${esc(i.name)}${i.portion?' ('+esc(i.portion)+')':''} ${Number(i.kcal)||0}kcal`).join('<br>')||'음식 인식 안 됨'}</div>
+    ${m.comment?`<div class="sub">💬 ${esc(m.comment)}</div>`:''}</div>
+    <button class="del" data-id="${m.id}">삭제</button></div>`).join(''):'<div class="sub">기록이 없습니다</div>';
+  $('mealList').querySelectorAll('.del').forEach(b=>b.onclick=async()=>{if(confirm('삭제할까요?')){await delMeal(+b.dataset.id);renderMeals();summary()}});
+}
+
+/* ---------- workouts ---------- */
+$('wDate').value=ymd(new Date());
+$('addWk').onclick=()=>{
+  const type=$('wType').value.trim();if(!type)return alert('운동 종류를 입력하세요');
+  workouts.push({id:Date.now(),date:$('wDate').value,type,min:+$('wMin').value||0,note:$('wNote').value.trim()});
+  save('workouts',workouts);
+  // 운동 기록 시 해당 날짜의 '운동함' 자동 체크
+  days[$('wDate').value]={...(days[$('wDate').value]||{}),ex:true};save('days',days);
+  $('wType').value=$('wMin').value=$('wNote').value='';renderWk();fillDay();
+};
+function renderWk(){
+  const ws=[...workouts].sort((a,b)=>a.date<b.date?1:a.id<b.id?1:-1);
+  $('wkList').innerHTML=ws.length?ws.map(w=>`<div class="item"><div class="grow"><b>${esc(w.date)}</b> · ${esc(w.type)} ${w.min}분
+    ${w.note?`<div class="sub">${esc(w.note)}</div>`:''}</div><button class="del" data-id="${w.id}">삭제</button></div>`).join(''):'<div class="sub">기록이 없습니다</div>';
+  $('wkList').querySelectorAll('.del').forEach(b=>b.onclick=()=>{workouts=workouts.filter(w=>w.id!==+b.dataset.id);save('workouts',workouts);renderWk();summary()});
+}
+
+/* ---------- settings ---------- */
+$('key').value=localStorage.getItem('apikey')||'';
+$('saveKey').onclick=()=>{const k=$('key').value.trim();k?localStorage.setItem('apikey',k):localStorage.removeItem('apikey');alert('저장됨')};
+$('exp').onclick=async()=>{
+  const data={days,workouts,meals:await allMeals()};
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));
+  a.download=`diet-${ymd(new Date())}.json`;a.click();
+};
+$('imp').onclick=()=>$('fImp').click();
+$('fImp').onchange=async e=>{
+  try{
+    const d=JSON.parse(await e.target.files[0].text());
+    if(!confirm('현재 데이터를 가져온 데이터로 덮어씁니다. 계속할까요?'))return;
+    days=d.days||{};workouts=d.workouts||[];save('days',days);save('workouts',workouts);
+    for(const m of (await allMeals()))await delMeal(m.id);
+    for(const m of (d.meals||[]))await putMeal(m);
+    fillDay();alert('완료');
+  }catch(err){alert('가져오기 실패: '+err.message)}
+};
+
+dbReady.then(fillDay);
+</script>
+</body>
+</html>
